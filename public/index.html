@@ -12,12 +12,13 @@
     --panel-2: #1c2027;
     --border: #2a2f38;
     --text: #e8eaee;
-    --muted: #8b93a1;
+    --muted: #99a3b3;
     --accent: #ff9d4f;
     --accent-2: #ff5c8a;
     --radius: 16px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -57,9 +58,13 @@
     border: 2px solid var(--border); border-radius: 12px; background: var(--panel-2);
     padding: 12px; cursor: pointer; transition: border-color .15s, background .15s;
     display: flex; flex-direction: column; gap: 10px; text-align: left;
+    color: var(--text); font-family: inherit;
   }
   .cat:hover { border-color: #3d4553; }
   .cat.selected { border-color: var(--accent); background: #241d18; }
+  .cat:focus-visible, .btn:focus-visible, .srcRow:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   .cat .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .cat .thumbs img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; display: block; }
   .cat .name { font-size: 15px; font-weight: 650; }
@@ -68,6 +73,22 @@
   /* --- phone / device --- */
   select#device { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px; font-size: 15px; outline: none; }
   select#device:focus { border-color: var(--accent); }
+
+  /* --- optional source image --- */
+  .srcRow {
+    display: flex; gap: 12px; align-items: center;
+    border: 2px dashed var(--border); border-radius: 12px; background: var(--panel-2);
+    padding: 10px 12px; min-height: 68px; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .srcRow:hover, .srcRow.over { border-color: var(--accent); background: #241d18; }
+  .srcRow img { width: 44px; height: 58px; object-fit: cover; border-radius: 8px; flex: none; }
+  .srcRow p { color: var(--muted); font-size: 12px; line-height: 1.5; flex: 1; }
+  .srcRow p b { color: var(--text); font-weight: 600; }
+  .srcClear {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; flex: none;
+  }
+  .srcClear:hover { color: var(--text); border-color: #3d4553; }
   .customWrap { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
   .customWrap input { width: 100px; text-align: right; }
 
@@ -140,8 +161,8 @@
   <div class="sub">Pick a style from the REF collection, pick your phone → get an original wallpaper in that aesthetic, sized exactly for your screen. Strictly no text in the artwork.</div>
 
   <div class="settings">
-    <input id="apiKey" type="password" placeholder="Gemini API key" autocomplete="off" />
-    <select id="model">
+    <input id="apiKey" type="password" placeholder="Gemini API key" autocomplete="off" aria-label="Gemini API key" />
+    <select id="model" aria-label="Image model">
       <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Nano Banana)</option>
       <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview (Nano Banana Pro)</option>
     </select>
@@ -156,12 +177,18 @@
   <div class="grid" style="margin-top:20px">
     <div class="card">
       <h2>2 · Phone</h2>
-      <select id="device"></select>
+      <select id="device" aria-label="Phone model"></select>
       <div class="customWrap" id="customWrap" hidden>
-        custom <input id="customW" type="number" min="200" max="4000" value="1080" /> ×
-        <input id="customH" type="number" min="200" max="4000" value="2400" /> px
+        custom <input id="customW" type="number" min="200" max="4000" value="1080" aria-label="Custom width in pixels" /> ×
+        <input id="customH" type="number" min="200" max="4000" value="2400" aria-label="Custom height in pixels" /> px
       </div>
       <div class="hint" id="sizeHint"></div>
+      <div class="srcRow" id="srcRow" role="button" tabindex="0" aria-label="Add an optional source image to restyle">
+        <img id="srcPreview" hidden alt="Source image preview" />
+        <p id="srcText"><b>Source image (optional)</b> — tap, drop or paste an image and it gets redrawn in the chosen style. Leave empty for a brand-new wallpaper.</p>
+        <button class="srcClear" id="srcClear" hidden type="button" aria-label="Remove source image">✕ remove</button>
+      </div>
+      <input id="srcFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
       <button class="btn" id="go">Generate wallpaper</button>
       <div class="error" id="error" hidden></div>
     </div>
@@ -170,7 +197,7 @@
       <h2>3 · Wallpaper</h2>
       <div class="outWrap">
         <div class="out" id="out">
-          <p id="outText">Result appears here</p>
+          <p id="outText">Pick a style and a phone, then hit Generate</p>
           <div class="lock ios" id="lock">
             <div class="date" id="lockDate"></div>
             <div class="time" id="lockTime"></div>
@@ -238,6 +265,7 @@
   let lastRaw = null;      // raw data URL from Gemini, for instant re-crops
   let lastWall = null;     // { dataUrl, name } cropped to the device
   let lastCatId = null;    // category the last result was generated with
+  let source = null;       // optional source image { base64, mimeType, dataUrl }
 
   // ---- settings persistence (this browser only) ----
   $("apiKey").value = localStorage.getItem("gemini_key") || "";
@@ -320,6 +348,43 @@
     });
   }
 
+  // ---- optional source image ----
+  function setSource(file) {
+    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      source = { base64: dataUrl.split(",")[1], mimeType: file.type, dataUrl };
+      $("srcPreview").src = dataUrl;
+      $("srcPreview").hidden = false;
+      $("srcText").innerHTML = "<b>Source image set</b> — it will be redrawn in the chosen style. Generate when ready.";
+      $("srcClear").hidden = false;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearSource() {
+    source = null;
+    $("srcPreview").hidden = true;
+    $("srcText").innerHTML = "<b>Source image (optional)</b> — tap, drop or paste an image and it gets redrawn in the chosen style. Leave empty for a brand-new wallpaper.";
+    $("srcClear").hidden = true;
+  }
+
+  {
+    const row = $("srcRow");
+    row.addEventListener("click", () => $("srcFile").click());
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("srcFile").click(); } });
+    $("srcFile").addEventListener("change", (e) => { setSource(e.target.files[0]); e.target.value = ""; });
+    $("srcClear").addEventListener("click", (e) => { e.stopPropagation(); clearSource(); });
+    row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
+    row.addEventListener("dragleave", () => row.classList.remove("over"));
+    row.addEventListener("drop", (e) => { e.preventDefault(); row.classList.remove("over"); setSource(e.dataTransfer.files[0]); });
+    window.addEventListener("paste", (e) => {
+      const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+      if (item) setSource(item.getAsFile());
+    });
+  }
+
   function currentDevice() {
     const v = $("device").value;
     if (v === "custom") {
@@ -348,20 +413,40 @@
   }
 
   // ---- prompt ----
-  function buildPrompt(cat, refCount) {
-    return [
-      `The ${refCount} attached images are REFERENCE artworks. They all belong to one aesthetic, called "${cat.label}".`,
+  function buildPrompt(cat, refCount, hasSource) {
+    const head = [
+      `The first ${refCount} attached images are REFERENCE artworks. They all belong to one aesthetic, called "${cat.label}".`,
       ...(cat.style ? [``, `Aesthetic definition: ${cat.style}`] : []),
       ``,
-      `The FIRST attached image is the PRIMARY reference. Create ONE brand-new, original PHONE WALLPAPER built on the PRIMARY reference's structural motif — the same kind of shapes, the same line and edge treatment, the same compositional system — arranged into a new, original composition.`,
-      ``,
-      `Rules:`,
-      `- COMMIT TO ONE MOTIF: the primary reference's. The other references only show the breadth of the aesthetic — use them for palette range, texture and finish ONLY. NEVER merge distinct structural motifs from different references into one image (for example: do not combine concentric line arches with blob clusters — pick the primary's motif and stay with it).`,
-      `- Invent a NEW composition: do not copy the primary reference's layout one-to-one; rearrange, rescale and recompose its motif.`,
+    ];
+    const shared = [
+      `- ORIGINALITY IS MANDATORY: never return a copy, near-copy or collage of any reference image. The references teach the style — they are not content to reuse. If the result would look like one of the references (or like pieces of several stitched together), it is WRONG; produce a clearly different, brand-new artwork instead.`,
       `- Portrait orientation, full bleed: the artwork reaches all four edges. No frame, no border, no margin, no mockup, no phone, no drop shadow.`,
       `- ABSOLUTE RULE — NO TEXT ANYWHERE: no letters, no words, no numbers, no typography, no logos, no watermarks, no signatures. Some reference images contain poster text; that text is NOT part of the aesthetic — ignore it completely and never render any text or lettering.`,
       `- It must work as a lock screen: balanced composition that still reads well with a clock overlaid in the upper third, with the strongest focal interest in the middle and lower two-thirds.`,
       `- Output exactly one image.`,
+    ];
+    if (hasSource) {
+      return [
+        ...head,
+        `The LAST attached image is the SOURCE image. It is NOT a style reference — it is the subject to transform.`,
+        ``,
+        `TRANSLATE the source into the "${cat.label}" aesthetic: rebuild every element from scratch in the aesthetic's shape language, line treatment, color palette and finish.`,
+        ``,
+        `Rules:`,
+        `- COMPOSITION COMES FROM THE SOURCE ONLY: recreate the source's layout, main subject and overall structure so the source stays recognizable. Do NOT take subject matter, scenery, objects or composition from any reference image — the references contribute style, palette and finish ONLY. If the result depicts something that appears in a reference but not in the source, it is WRONG.`,
+        `- Nothing from the source may survive as-is either: every shape, texture and color must be re-drawn in the aesthetic. The result should feel like the style's original artist saw the source and painted their own version of it.`,
+        ...shared,
+      ].join("\n");
+    }
+    return [
+      ...head,
+      `The FIRST attached image is the PRIMARY reference. Create ONE brand-new, original PHONE WALLPAPER built on the PRIMARY reference's structural motif — the same kind of shapes, the same line and edge treatment, the same compositional system — arranged into a new, original composition.`,
+      ``,
+      `Rules:`,
+      `- COMMIT TO ONE MOTIF: the primary reference's. The other references only show the breadth of the aesthetic — use them for palette range, texture and finish ONLY. NEVER merge distinct structural motifs from different references into one image (for example: do not combine concentric line arches with blob clusters — pick the primary's motif and stay with it).`,
+      `- Invent a NEW composition: do not copy the primary reference's layout one-to-one; rearrange, rescale and recompose its motif into something that has never existed before.`,
+      ...shared,
     ].join("\n");
   }
 
@@ -386,9 +471,10 @@
     return copy.slice(0, n);
   }
 
-  async function callGemini({ apiKey, model, prompt, refs, aspectRatio }) {
+  async function callGemini({ apiKey, model, prompt, refs, sourceImg, aspectRatio }) {
     const parts = [{ text: prompt }];
     for (const r of refs) parts.push({ inline_data: { mime_type: r.mimeType, data: r.base64 } });
+    if (sourceImg) parts.push({ inline_data: { mime_type: sourceImg.mimeType, data: sourceImg.base64 } });
 
     const imageConfig = { aspectRatio };
     if (model.startsWith("gemini-3")) imageConfig.imageSize = "2K";
@@ -513,8 +599,8 @@
     out.classList.remove("locked");
     const img = out.querySelector("img.wall");
     if (img) img.remove();
-    if (!out.querySelector("#outText")) out.insertAdjacentHTML("afterbegin", '<p id="outText">Result appears here</p>');
-    else out.querySelector("#outText").textContent = "Result appears here";
+    if (!out.querySelector("#outText")) out.insertAdjacentHTML("afterbegin", '<p id="outText">Pick a style and a phone, then hit Generate</p>');
+    else out.querySelector("#outText").textContent = "Pick a style and a phone, then hit Generate";
     lastRaw = null;
     lastWall = null;
     $("rateRow").hidden = true;
@@ -589,15 +675,17 @@
 
     try {
       const d = currentDevice();
-      const refNames = pickRandom(cat.files, MAX_REFS);
+      // With a source image, fewer refs — the source must dominate the prompt.
+      const refNames = pickRandom(cat.files, source ? 3 : MAX_REFS);
       const refs = await Promise.all(refNames.map(fetchRefAsBase64));
-      const prompt = buildPrompt(cat, refs.length);
+      const prompt = buildPrompt(cat, refs.length, !!source);
 
       const result = await callGemini({
         apiKey,
         model: $("model").value,
         prompt,
         refs,
+        sourceImg: source,
         aspectRatio: bestRatio(d.w, d.h),
       });
 
