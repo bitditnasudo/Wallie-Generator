@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e1013" />
+<title>Wallie — wallpaper generator</title>
+<style>
+  :root {
+    --bg: #0e1013;
+    --panel: #16191e;
+    --panel-2: #1c2027;
+    --border: #2a2f38;
+    --text: #e8eaee;
+    --muted: #8b93a1;
+    --accent: #ff9d4f;
+    --accent-2: #ff5c8a;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    padding: 40px 24px calc(40px + env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  h1 span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .settings { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; align-items: center; }
+  .settings input, .settings select, .customWrap input {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 11px 12px; font-size: 16px; outline: none;
+  }
+  .settings input:focus, .settings select:focus { border-color: var(--accent); }
+  .settings input#apiKey { flex: 1; min-width: 220px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .hint.ok { color: #5dd39e; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 14px;
+    margin-top: 20px;
+  }
+  .card h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .grid .card { margin-top: 0; }
+
+  /* --- style category cards --- */
+  .cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .cat {
+    border: 2px solid var(--border); border-radius: 12px; background: var(--panel-2);
+    padding: 12px; cursor: pointer; transition: border-color .15s, background .15s;
+    display: flex; flex-direction: column; gap: 10px; text-align: left;
+  }
+  .cat:hover { border-color: #3d4553; }
+  .cat.selected { border-color: var(--accent); background: #241d18; }
+  .cat .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .cat .thumbs img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 6px; display: block; }
+  .cat .name { font-size: 15px; font-weight: 650; }
+  .cat .tag { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+  /* --- phone / device --- */
+  select#device { width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px; font-size: 15px; outline: none; }
+  select#device:focus { border-color: var(--accent); }
+  .customWrap { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
+  .customWrap input { width: 100px; text-align: right; }
+
+  .btn {
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: #1a1006; border: none;
+    border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s, transform .05s; touch-action: manipulation;
+  }
+  .btn:hover { opacity: .9; }
+  .btn:active { transform: scale(.99); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  .btnRow { display: flex; gap: 10px; }
+  .btnRow .btn { flex: 1; }
+
+  /* --- result preview --- */
+  .outWrap { display: flex; justify-content: center; }
+  .out {
+    border: 1px solid var(--border); border-radius: 18px; background: var(--panel-2);
+    aspect-ratio: 9 / 19.5; height: 480px; max-width: 100%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .out img.wall { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .out p { color: var(--muted); font-size: 14px; padding: 0 16px; text-align: center; }
+
+  /* lock-screen overlay */
+  .lock { position: absolute; inset: 0; pointer-events: none; display: none; color: #fff; text-shadow: 0 1px 12px rgba(0,0,0,.35); }
+  .out.locked .lock { display: block; }
+  .lock .statusbar { position: absolute; top: 2.2%; left: 0; right: 0; display: flex; justify-content: center; font-size: 11px; opacity: .9; }
+  .lock.ios .date { position: absolute; top: 9%; width: 100%; text-align: center; font-size: 14px; font-weight: 600; }
+  .lock.ios .time { position: absolute; top: 11.5%; width: 100%; text-align: center; font-size: 64px; font-weight: 700; letter-spacing: -0.02em; }
+  .lock.pixel .time { position: absolute; top: 26%; width: 100%; text-align: center; font-size: 58px; font-weight: 500; line-height: 1.02; }
+  .lock.pixel .date { position: absolute; top: 20.5%; width: 100%; text-align: center; font-size: 13px; font-weight: 500; opacity: .95; }
+
+  .spinner {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error { color: #ff7b72; font-size: 13px; line-height: 1.5; word-break: break-word; }
+
+  details { margin-top: 20px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; padding: 8px 0; }
+  pre {
+    margin-top: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; font-size: 12px; line-height: 1.6; color: #c9d1d9; white-space: pre-wrap; overflow-x: auto;
+  }
+  .refs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .refs img { width: 44px; height: 58px; object-fit: cover; border-radius: 8px; }
+
+  @media (max-width: 760px) {
+    body { padding: 20px 14px calc(28px + env(safe-area-inset-bottom)); }
+    .grid { grid-template-columns: 1fr; gap: 16px; }
+    .card { padding: 14px; }
+    .cats { grid-template-columns: 1fr; }
+    .cat { flex-direction: row; align-items: center; }
+    .cat .thumbs { flex: 0 0 132px; }
+    .settings { gap: 8px; }
+    .settings input#apiKey { min-width: 100%; }
+    .settings select { flex: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span>Wallie</span></h1>
+  <div class="sub">Pick a style from the REF collection, pick your phone → get an original wallpaper in that aesthetic, sized exactly for your screen. Strictly no text in the artwork.</div>
+
+  <div class="settings">
+    <input id="apiKey" type="password" placeholder="Gemini API key" autocomplete="off" />
+    <select id="model">
+      <option value="gemini-2.5-flash-image">gemini-2.5-flash-image (Nano Banana)</option>
+      <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview (Nano Banana Pro)</option>
+    </select>
+  </div>
+  <div class="hint" id="keyHint"></div>
+
+  <div class="card">
+    <h2>1 · Style</h2>
+    <div class="cats" id="cats"><p class="hint">Loading styles…</p></div>
+  </div>
+
+  <div class="grid" style="margin-top:20px">
+    <div class="card">
+      <h2>2 · Phone</h2>
+      <select id="device"></select>
+      <div class="customWrap" id="customWrap" hidden>
+        custom <input id="customW" type="number" min="200" max="4000" value="1080" /> ×
+        <input id="customH" type="number" min="200" max="4000" value="2400" /> px
+      </div>
+      <div class="hint" id="sizeHint"></div>
+      <button class="btn" id="go">Generate wallpaper</button>
+      <div class="error" id="error" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Wallpaper</h2>
+      <div class="outWrap">
+        <div class="out" id="out">
+          <p id="outText">Result appears here</p>
+          <div class="lock ios" id="lock">
+            <div class="date" id="lockDate"></div>
+            <div class="time" id="lockTime"></div>
+          </div>
+        </div>
+      </div>
+      <div class="btnRow" id="rateRow" hidden>
+        <button class="btn secondary" id="like" title="Save this wallpaper into the style's REF folder as a new reference">👍 Save as reference</button>
+        <button class="btn secondary" id="dislike" title="Discard this result">👎 Discard</button>
+      </div>
+      <div class="hint" id="rateHint" hidden></div>
+      <button class="btn" id="save" hidden>⬇ Save wallpaper</button>
+      <div class="btnRow">
+        <button class="btn secondary" id="lockToggle" hidden>Lock-screen preview</button>
+        <button class="btn secondary" id="downloadRaw" hidden>Raw output</button>
+      </div>
+    </div>
+  </div>
+
+  <details id="promptBox" hidden>
+    <summary>Prompt sent to Gemini &amp; reference images used</summary>
+    <div class="refs" id="refsUsed"></div>
+    <pre id="prompt"></pre>
+  </details>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const MAX_REFS = 6;
+
+  // ---- device catalog (native screen resolution in pixels) ----
+  const DEVICES = [
+    { group: "iPhone", items: [
+      ["iPhone 17 Pro Max", 1320, 2868],
+      ["iPhone 17 Pro", 1206, 2622],
+      ["iPhone 17", 1206, 2622],
+      ["iPhone Air", 1260, 2736],
+      ["iPhone 16 Pro Max", 1320, 2868],
+      ["iPhone 16 Pro", 1206, 2622],
+      ["iPhone 16 Plus", 1290, 2796],
+      ["iPhone 16", 1179, 2556],
+      ["iPhone 15 Pro Max", 1290, 2796],
+      ["iPhone 15 Pro / 15", 1179, 2556],
+      ["iPhone 14 / 13 / 12", 1170, 2532],
+      ["iPhone SE (2020 / 2022)", 750, 1334],
+    ]},
+    { group: "Pixel", items: [
+      ["Pixel 10 Pro XL", 1344, 2992],
+      ["Pixel 10 Pro", 1280, 2856],
+      ["Pixel 10", 1080, 2424],
+      ["Pixel 9 Pro XL", 1344, 2992],
+      ["Pixel 9 Pro", 1280, 2856],
+      ["Pixel 9 / 9a", 1080, 2424],
+      ["Pixel 8 Pro", 1344, 2992],
+      ["Pixel 8 / 8a", 1080, 2400],
+      ["Pixel 7 Pro", 1440, 3120],
+      ["Pixel 7 / 7a", 1080, 2400],
+      ["Pixel 6 Pro", 1440, 3120],
+      ["Pixel 6 / 6a", 1080, 2400],
+    ]},
+  ];
+
+  let manifest = null;     // refs.json
+  let selectedCat = null;  // category id
+  let lastRaw = null;      // raw data URL from Gemini, for instant re-crops
+  let lastWall = null;     // { dataUrl, name } cropped to the device
+  let lastCatId = null;    // category the last result was generated with
+
+  // ---- settings persistence (this browser only) ----
+  $("apiKey").value = localStorage.getItem("gemini_key") || "";
+  $("apiKey").addEventListener("input", () => localStorage.setItem("gemini_key", $("apiKey").value.trim()));
+  $("model").value = localStorage.getItem("gemini_model") || "gemini-2.5-flash-image";
+  $("model").addEventListener("change", () => localStorage.setItem("gemini_model", $("model").value));
+
+  // When served by the local server, .env provides the key automatically.
+  (async () => {
+    const h = $("keyHint");
+    try {
+      const r = await fetch("/api/key");
+      if (r.ok) {
+        const { key } = await r.json();
+        if (key && !$("apiKey").value) {
+          $("apiKey").value = key;
+          h.textContent = "✓ API key loaded from local .env.";
+          h.classList.add("ok");
+          return;
+        }
+      }
+    } catch {}
+    if ($("apiKey").value) { h.textContent = "✓ API key saved in this browser."; h.classList.add("ok"); }
+    else h.textContent = "Paste your Gemini API key above — it is stored only in this browser and sent only to Google.";
+  })();
+
+  // ---- style categories ----
+  (async () => {
+    manifest = await (await fetch("refs.json")).json();
+    const saved = localStorage.getItem("wallie_cat");
+    selectedCat = manifest.categories.some(c => c.id === saved) ? saved : manifest.categories[0].id;
+    const wrap = $("cats");
+    wrap.innerHTML = "";
+    for (const cat of manifest.categories) {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "cat" + (cat.id === selectedCat ? " selected" : "");
+      el.dataset.id = cat.id;
+      el.innerHTML =
+        `<div class="thumbs">` +
+        cat.files.slice(0, 3).map(f => `<img src="refs/${encodeURIComponent(f)}" alt="" />`).join("") +
+        `</div><div><div class="name">${cat.label}</div><div class="tag">${cat.tagline}</div></div>`;
+      el.addEventListener("click", () => {
+        selectedCat = cat.id;
+        localStorage.setItem("wallie_cat", cat.id);
+        for (const c of wrap.children) c.classList.toggle("selected", c.dataset.id === cat.id);
+      });
+      wrap.appendChild(el);
+    }
+  })().catch(() => { $("cats").innerHTML = '<p class="hint">Could not load refs.json — run "npm run build:refs".</p>'; });
+
+  // ---- device select ----
+  {
+    const sel = $("device");
+    for (const g of DEVICES) {
+      const og = document.createElement("optgroup");
+      og.label = g.group;
+      for (const [name, w, h] of g.items) {
+        const o = document.createElement("option");
+        o.value = `${name}|${w}|${h}`;
+        o.textContent = `${name} — ${w} × ${h}`;
+        og.appendChild(o);
+      }
+      sel.appendChild(og);
+    }
+    const custom = document.createElement("option");
+    custom.value = "custom";
+    custom.textContent = "Custom size…";
+    sel.appendChild(custom);
+    const saved = localStorage.getItem("wallie_device");
+    if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+    sel.addEventListener("change", () => {
+      localStorage.setItem("wallie_device", sel.value);
+      updateSizeHint();
+      if (lastRaw) renderResult(lastRaw); // re-crop for the new phone, no new API call
+    });
+    for (const id of ["customW", "customH"]) $(id).addEventListener("change", () => {
+      updateSizeHint();
+      if (lastRaw) renderResult(lastRaw);
+    });
+  }
+
+  function currentDevice() {
+    const v = $("device").value;
+    if (v === "custom") {
+      const w = Math.round(+$("customW").value) || 1080;
+      const h = Math.round(+$("customH").value) || 2400;
+      return { name: "Custom", w, h, pixel: false };
+    }
+    const [name, w, h] = v.split("|");
+    return { name, w: +w, h: +h, pixel: name.startsWith("Pixel") };
+  }
+
+  function updateSizeHint() {
+    const d = currentDevice();
+    $("customWrap").hidden = $("device").value !== "custom";
+    $("sizeHint").textContent = `Output: ${d.w} × ${d.h} px PNG, generated at ${bestRatio(d.w, d.h)} and center-cropped to fit.`;
+    $("out").style.aspectRatio = `${d.w} / ${d.h}`;
+  }
+
+  // ---- aspect ratio: closest one Gemini supports ----
+  const RATIOS = [["9:16", 9/16], ["2:3", 2/3], ["3:4", 3/4], ["4:5", 4/5], ["1:1", 1], ["5:4", 5/4], ["4:3", 4/3], ["3:2", 3/2], ["16:9", 16/9], ["21:9", 21/9]];
+  function bestRatio(w, h) {
+    const r = w / h;
+    let best = RATIOS[0];
+    for (const c of RATIOS) if (Math.abs(Math.log(c[1] / r)) < Math.abs(Math.log(best[1] / r))) best = c;
+    return best[0];
+  }
+
+  // ---- prompt ----
+  function buildPrompt(cat, refCount) {
+    return [
+      `The ${refCount} attached images are REFERENCE artworks. They all belong to one aesthetic, called "${cat.label}".`,
+      ...(cat.style ? [``, `Aesthetic definition: ${cat.style}`] : []),
+      ``,
+      `The FIRST attached image is the PRIMARY reference. Create ONE brand-new, original PHONE WALLPAPER built on the PRIMARY reference's structural motif — the same kind of shapes, the same line and edge treatment, the same compositional system — arranged into a new, original composition.`,
+      ``,
+      `Rules:`,
+      `- COMMIT TO ONE MOTIF: the primary reference's. The other references only show the breadth of the aesthetic — use them for palette range, texture and finish ONLY. NEVER merge distinct structural motifs from different references into one image (for example: do not combine concentric line arches with blob clusters — pick the primary's motif and stay with it).`,
+      `- Invent a NEW composition: do not copy the primary reference's layout one-to-one; rearrange, rescale and recompose its motif.`,
+      `- Portrait orientation, full bleed: the artwork reaches all four edges. No frame, no border, no margin, no mockup, no phone, no drop shadow.`,
+      `- ABSOLUTE RULE — NO TEXT ANYWHERE: no letters, no words, no numbers, no typography, no logos, no watermarks, no signatures. Some reference images contain poster text; that text is NOT part of the aesthetic — ignore it completely and never render any text or lettering.`,
+      `- It must work as a lock screen: balanced composition that still reads well with a clock overlaid in the upper third, with the strongest focal interest in the middle and lower two-thirds.`,
+      `- Output exactly one image.`,
+    ].join("\n");
+  }
+
+  async function fetchRefAsBase64(name) {
+    const r = await fetch("refs/" + encodeURIComponent(name));
+    const blob = await r.blob();
+    const dataUrl = await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+    return { base64: dataUrl.split(",")[1], mimeType: blob.type || "image/webp" };
+  }
+
+  function pickRandom(arr, n) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, n);
+  }
+
+  async function callGemini({ apiKey, model, prompt, refs, aspectRatio }) {
+    const parts = [{ text: prompt }];
+    for (const r of refs) parts.push({ inline_data: { mime_type: r.mimeType, data: r.base64 } });
+
+    const imageConfig = { aspectRatio };
+    if (model.startsWith("gemini-3")) imageConfig.imageSize = "2K";
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts }],
+          generationConfig: { responseModalities: ["IMAGE"], imageConfig },
+        }),
+      }
+    );
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data?.error?.message || `Gemini API error (HTTP ${resp.status})`);
+    const outParts = data?.candidates?.[0]?.content?.parts || [];
+    const img = outParts.find((p) => p.inlineData || p.inline_data);
+    if (!img) {
+      const text = outParts.find((p) => p.text)?.text;
+      throw new Error(text ? `Model returned no image: ${text}` : "Model returned no image.");
+    }
+    const inline = img.inlineData || img.inline_data;
+    return { base64: inline.data, mimeType: inline.mimeType || inline.mime_type || "image/png" };
+  }
+
+  // ---- crop the raw output to the exact device resolution (cover fit) ----
+  function coverCrop(rawDataUrl, W, H) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const cv = document.createElement("canvas");
+        cv.width = W; cv.height = H;
+        const ctx = cv.getContext("2d");
+        ctx.imageSmoothingQuality = "high";
+        const s = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        resolve(cv.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = rawDataUrl;
+    });
+  }
+
+  function downloadUrl(url, name) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const d = currentDevice();
+    const lock = $("lock");
+    lock.className = "lock " + (d.pixel ? "pixel" : "ios");
+    $("lockTime").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: false });
+    $("lockDate").textContent = now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  }
+
+  async function renderResult(rawDataUrl) {
+    const d = currentDevice();
+    const cat = lastCatId || selectedCat;
+    const wall = await coverCrop(rawDataUrl, d.w, d.h);
+    const slug = d.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    lastWall = { dataUrl: wall, name: `wallie-${cat}-${slug}-${d.w}x${d.h}.png` };
+
+    const out = $("out");
+    out.style.aspectRatio = `${d.w} / ${d.h}`;
+    let img = out.querySelector("img.wall");
+    if (!img) {
+      img = document.createElement("img");
+      img.className = "wall";
+      img.alt = "Generated wallpaper";
+      out.insertBefore(img, $("lock"));
+    }
+    img.src = wall;
+    const t = out.querySelector("#outText");
+    if (t) t.remove();
+    updateClock();
+
+    $("rateRow").hidden = false;
+    $("lockToggle").hidden = false;
+    $("save").hidden = false;
+    $("save").textContent = `⬇ Save wallpaper — ${d.name}, ${d.w} × ${d.h}`;
+    $("downloadRaw").hidden = false;
+    $("downloadRaw").onclick = () => downloadUrl(rawDataUrl, `wallie-${cat}-raw.png`);
+  }
+
+  // Dedicated save: on phones the native share sheet opens (→ "Save Image" /
+  // save to Photos); on desktop it downloads the device-sized PNG.
+  $("save").addEventListener("click", async () => {
+    if (!lastWall) return;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile && navigator.canShare) {
+      try {
+        const blob = await (await fetch(lastWall.dataUrl)).blob();
+        const file = new File([blob], lastWall.name, { type: "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          return;
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return; // user closed the share sheet
+      }
+    }
+    downloadUrl(lastWall.dataUrl, lastWall.name);
+  });
+
+  // ---- 👍 / 👎 ----
+  function resetRating() {
+    $("like").disabled = false;
+    $("like").textContent = "👍 Save as reference";
+    $("dislike").disabled = false;
+    $("rateHint").hidden = true;
+  }
+
+  function clearResult() {
+    const out = $("out");
+    out.classList.remove("locked");
+    const img = out.querySelector("img.wall");
+    if (img) img.remove();
+    if (!out.querySelector("#outText")) out.insertAdjacentHTML("afterbegin", '<p id="outText">Result appears here</p>');
+    else out.querySelector("#outText").textContent = "Result appears here";
+    lastRaw = null;
+    lastWall = null;
+    $("rateRow").hidden = true;
+    $("rateHint").hidden = true;
+    $("lockToggle").hidden = true;
+    $("save").hidden = true;
+    $("downloadRaw").hidden = true;
+  }
+
+  $("dislike").addEventListener("click", clearResult);
+
+  $("like").addEventListener("click", async () => {
+    if (!lastRaw || !lastCatId) return;
+    const catLabel = manifest?.categories.find(c => c.id === lastCatId)?.label || lastCatId;
+    $("like").disabled = true;
+    $("like").textContent = "Saving…";
+    try {
+      const r = await fetch("/api/save-ref", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: lastCatId, dataUrl: lastRaw }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.ok) throw new Error(data.error || "Save failed.");
+      $("like").textContent = "✓ Saved";
+      $("dislike").disabled = true;
+      $("rateHint").textContent = `Saved to ${data.saved} — it's now part of the ${catLabel} reference pool.`;
+      $("rateHint").hidden = false;
+      try { manifest = await (await fetch("refs.json?t=" + Date.now())).json(); } catch {}
+    } catch (err) {
+      // Deployed (static) version has no save endpoint — download instead.
+      $("like").textContent = "👍 Save as reference";
+      $("like").disabled = false;
+      downloadUrl(lastRaw, `wallie-ref-${lastCatId}.png`);
+      $("rateHint").textContent = `Couldn't save directly (${err.message}) — downloaded the image instead; drop it into the REF folder for ${catLabel}.`;
+      $("rateHint").hidden = false;
+    }
+  });
+
+  $("lockToggle").addEventListener("click", () => {
+    updateClock();
+    $("out").classList.toggle("locked");
+  });
+
+  // ---- generation ----
+  $("go").addEventListener("click", async () => {
+    const apiKey = $("apiKey").value.trim();
+    if (!apiKey) {
+      $("error").textContent = "Paste your Gemini API key first (top field).";
+      $("error").hidden = false;
+      return;
+    }
+    if (!manifest) return;
+    const cat = manifest.categories.find(c => c.id === selectedCat);
+    if (!cat || !cat.files.length) {
+      $("error").textContent = "No reference images in this style yet.";
+      $("error").hidden = false;
+      return;
+    }
+
+    $("go").disabled = true;
+    $("error").hidden = true;
+    $("rateRow").hidden = true;
+    $("rateHint").hidden = true;
+    const out = $("out");
+    out.classList.remove("locked");
+    const img = out.querySelector("img.wall");
+    if (img) img.remove();
+    out.insertAdjacentHTML("afterbegin", out.querySelector("#outText") ? "" : '<p id="outText"></p>');
+    out.querySelector("#outText").innerHTML = "";
+    out.querySelector("#outText").appendChild(Object.assign(document.createElement("div"), { className: "spinner" }));
+
+    try {
+      const d = currentDevice();
+      const refNames = pickRandom(cat.files, MAX_REFS);
+      const refs = await Promise.all(refNames.map(fetchRefAsBase64));
+      const prompt = buildPrompt(cat, refs.length);
+
+      const result = await callGemini({
+        apiKey,
+        model: $("model").value,
+        prompt,
+        refs,
+        aspectRatio: bestRatio(d.w, d.h),
+      });
+
+      lastRaw = `data:${result.mimeType};base64,${result.base64}`;
+      lastCatId = cat.id;
+      resetRating();
+      await renderResult(lastRaw);
+
+      $("prompt").textContent = prompt;
+      $("refsUsed").innerHTML = refNames.map((n, i) =>
+        `<img src="refs/${encodeURIComponent(n)}" title="${i === 0 ? "PRIMARY — " : ""}${n}" alt="${n}"${i === 0 ? ' style="outline:2px solid var(--accent);outline-offset:2px"' : ""} />`
+      ).join("");
+      $("promptBox").hidden = false;
+    } catch (err) {
+      out.querySelector("#outText").textContent = "Result appears here";
+      $("error").textContent = err.message;
+      $("error").hidden = false;
+    } finally {
+      $("go").disabled = false;
+    }
+  });
+
+  updateSizeHint();
+</script>
+</body>
+</html>

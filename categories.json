@@ -1,0 +1,17 @@
+{
+  "_readme": "Categories come from the subfolders of REF/ — one folder per style, folder name = style name. This file only adds the prompt text for each folder (matched case-insensitively). If a folder has no entry here, the app still works but the prompt relies on the reference images alone; ask Claude to look at the folder and write its entry.",
+  "styles": {
+    "Bauhaus": {
+      "tagline": "Concentric & parallel linework, muted vintage print colors",
+      "style": "Dense families of thin concentric parallel lines forming arcs, racetrack loops and rippling contour waves, sometimes anchored by a bold solid circle; hypnotic repetitive rhythm in the linework; muted vintage palette (deep green, black, warm oranges) on warm cream paper; completely flat inks, crisp edges, subtle 1920s letterpress print feel."
+    },
+    "Dream Blob": {
+      "tagline": "Hazy amorphous blobs & auras, rich glowing palette",
+      "style": "Soft out-of-focus amorphous blobs and auras: one or a few organic color masses with completely blurred edges that melt into the background; rich saturated cores (electric blue, violet, coral, orange, pink, teal) glowing like an aura; smooth airbrushed gradients with fine film grain; the background is one quiet field — pure white, soft cream, pale grey or deep near-black; no outlines, no hard edges, no geometry anywhere."
+    },
+    "Organic Shape": {
+      "tagline": "Bold rounded forms, crisp edges, playful negative space",
+      "style": "Bold rounded organic forms with crisp smooth edges — thick ribbons and squiggles, interlocking arcs and chain links, metaball clusters, cutout amoeba silhouettes, stacked rounded blocks or overlapping ovals; each shape in flat saturated color or one simple smooth duotone gradient; playful confident composition with generous negative space against a soft neutral or pastel background; modern art-print energy."
+    }
+  }
+}

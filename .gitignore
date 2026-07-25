@@ -1,0 +1,12 @@
+# secrets
+.env
+
+# dependencies
+node_modules/
+
+# original full-size references — the app uses public/refs/ (768px webp)
+REF/
+
+# local-only launcher artifacts
+*.lnk
+.vercel

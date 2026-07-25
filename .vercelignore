@@ -1,0 +1,12 @@
+.vercel
+REF
+node_modules
+.env
+*.lnk
+launch.bat
+server.js
+tools
+.claude
+categories.json
+package.json
+package-lock.json

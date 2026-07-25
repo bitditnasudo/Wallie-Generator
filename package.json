@@ -1,0 +1,12 @@
+{
+  "name": "wallie-generator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "build:refs": "node tools/build-refs.js"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.0"
+  }
+}
