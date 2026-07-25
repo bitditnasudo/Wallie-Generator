@@ -2,6 +2,9 @@
 
 Generates original phone wallpapers in the aesthetic of the `REF/` image collection using the Gemini image API, sized exactly for your iPhone or Pixel. Hard rule baked into every prompt: **no text ever appears in the artwork**.
 
+**Live app:** https://wallie-generator.vercel.app
+**Repo:** https://github.com/bitditnasudo/Wallie-Generator
+
 Sibling project of the [Icon Generator](https://icongenerator-one.vercel.app) — same architecture: fully static app, the browser calls the Gemini API directly, no backend.
 
 ## Usage
@@ -32,4 +35,4 @@ Locally, the API key is auto-loaded from `.env` (`GEMINI_API_KEY=...`). `launch.
 
 ## Deploy
 
-Static deploy of `public/` via Vercel (`vercel --prod`), same setup as the icon generator.
+Pushes to `master` auto-deploy to Vercel (project `wallie-generator`). Manual deploy: `vercel --prod`. Remember to run `npm run build:refs` (or just start the local server once) before pushing if you changed `REF/`, so the committed `public/refs` is current.
